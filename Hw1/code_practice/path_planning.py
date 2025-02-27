@@ -1,6 +1,7 @@
 import numpy as np
 import cv2
 import argparse
+import time
 
 def pos_int(p):
     return (int(p[0]), int(p[1]))
@@ -29,13 +30,15 @@ if __name__ == "__main__":
     cv2.circle(img,(start[0],start[1]),5,(0,0,1),3)
     cv2.circle(img,(goal[0],goal[1]),5,(0,1,0),3)
 
+    start_time = time.time()
+
     if args.planner == "a_star":
         from PathPlanning.planner_a_star import PlannerAStar as Planner
         planner = Planner(m, 20)
         path = planner.planning(start, goal, img=img)
     elif args.planner == "rrt":
         from PathPlanning.planner_rrt import PlannerRRT as Planner
-        planner = Planner(m, 40)
+        planner = Planner(m, 30)
         path = planner.planning(start, goal, img=img)
     elif args.planner == "rrt_star":
         from PathPlanning.planner_rrt_star import PlannerRRTStar as Planner
@@ -46,6 +49,9 @@ if __name__ == "__main__":
         exit(0)
     
     print(path)
+    print("Time : ", time.time()-start_time)
+    if args.planner != "a_star":
+        print("Total Cost : ", planner.cost[goal])
     
     # Extract Path
     if not args.smooth:
