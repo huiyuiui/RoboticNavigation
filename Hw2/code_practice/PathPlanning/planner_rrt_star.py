@@ -49,7 +49,34 @@ class PlannerRRTStar(Planner):
             return False, None
         else:        
             return new_node, utils.distance(new_node, from_node)
+        
+    def _re_parent(self, new_node, near_node, cost, threshold):
+        parent_node = near_node
+        parent_cost  = self.cost[near_node] + cost # cost from near node to new node
+        min_cost = 99999
+        for node in self.ntree:
+            # if node is near node or distance from node to new node is larger than threshold or collision occurs
+            if node == near_node or utils.distance(node, new_node) > threshold or self._check_collision(node, new_node):
+                continue
+            new_cost = self.cost[node] + utils.distance(node, new_node) # cost from reparent node to new node
+            if new_cost < min_cost:
+                min_cost = new_cost
+                parent_node = node
+                parent_cost = new_cost
+
+        return parent_node, parent_cost
     
+    def _re_wire(self, new_node, threshold):
+        for node in self.ntree:
+            edge_cost = utils.distance(node, new_node)
+            # if node is near node or distance from node to new node is larger than threshold or collision occurs
+            if node == new_node or edge_cost > threshold or self._check_collision(node, new_node):
+                continue
+            if self.cost[new_node] + edge_cost < self.cost[node]:
+                self.ntree[node] = new_node
+                self.cost[node] = self.cost[new_node] + edge_cost
+                
+        return
 
     def planning(self, start, goal, extend_len=None, img=None):
         if extend_len is None:
@@ -61,20 +88,23 @@ class PlannerRRTStar(Planner):
         goal_node = None
         for it in range(20000):
             #print("\r", it, len(self.ntree), end="")
-            samp_node = self._random_node(goal, self.map.shape)
-            near_node = self._nearest_node(samp_node)
-            new_node, cost = self._steer(near_node, samp_node, extend_len)
+            samp_node = self._random_node(goal, self.map.shape) # random sample
+            near_node = self._nearest_node(samp_node) # find nearest node
+            new_node, cost = self._steer(near_node, samp_node, extend_len) # steer
             if new_node is not False:
-                self.ntree[new_node] = near_node
-                self.cost[new_node] = cost + self.cost[near_node]
+                # TODO: Re-Parent & Re-Wire
+                # Re-Parent
+                parent_node, parent_cost = self._re_parent(new_node, near_node, cost, extend_len)
+                self.ntree[new_node] = parent_node
+                self.cost[new_node] = parent_cost
+                # Re-Wire
+                self._re_wire(new_node, extend_len)
+                # Goal check
+                if utils.distance(near_node, goal) < extend_len:
+                    goal_node = near_node
+                    break
             else:
                 continue
-            if utils.distance(near_node, goal) < extend_len:
-                goal_node = near_node
-                break
-                
-            # TODO: HW1 Re-Parent & Re-Wire
-            
 
             # Draw
             if img is not None:
