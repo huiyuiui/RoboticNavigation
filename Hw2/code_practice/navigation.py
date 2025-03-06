@@ -4,6 +4,7 @@ import cv2
 from Simulation.utils import ControlState
 from Simulation.simulator_map import SimulatorMap
 from PathPlanning.cubic_spline import *
+from PathPlanning.utils import distance
 
 ##############################
 # Global Variables
@@ -58,23 +59,34 @@ def navigation(args, simulator, controller, planner, start_pose=(100,200,0)):
         pose = (simulator.state.x, simulator.state.y, simulator.state.yaw)
         print("\r", simulator, "| Goal:", nav_pos, end="\t")
         
+        # Goal Check
+        if(nav_pos is not None and distance(pos_int((pose[0], pose[1])), nav_pos) < 20):
+            while(True):
+                k = cv2.waitKey(1)  # Wait for user enter ESC
+                if k == 27:
+                    break
+            break
+        
         if set_controller_path:
             controller.set_path(path)
             set_controller_path = False
 
         if path is not None and collision_count == 0:
             # TODO: Planning and Controlling
+            info = {"x":pose[0], "y":pose[1], "yaw":pose[2], "v":simulator.state.v, "dt":simulator.dt}
             if args.simulator == "basic":
-                next_v = 0
-                next_w = 0
+                next_v = 5
+                next_w = controller.feedback(info)
                 command = ControlState("basic", next_v, next_w)
             elif args.simulator == "diff_drive":
-                next_lw = 0
-                next_rw = 0
+                next_w = controller.feedback(info)
+                next_v = 150
+                next_lw = (next_v - next_w * simulator.l) / (simulator.wu / 2)
+                next_rw = (next_v + next_w * simulator.l) / (simulator.wu / 2)
                 command = ControlState("diff_drive", next_lw, next_rw)
             elif args.simulator == "bicycle":
-                next_a = 0
-                next_delta = 0
+                next_a = 0.5 if simulator.state.v < 5 else 0
+                next_delta = controller.feedback(info)
                 command = ControlState("bicycle", next_a, next_delta)
             else:
                 exit()            
@@ -87,6 +99,35 @@ def navigation(args, simulator, controller, planner, start_pose=(100,200,0)):
             collision_count = 1
         if collision_count > 0:
             # TODO: Collision Handling
+            if args.simulator == "basic":
+                next_v = -next_v
+                command = ControlState("basic", next_v, 0)
+            elif args.simulator == "diff_drive":
+                next_lw = -50
+                next_rw = -50
+                command = ControlState("diff_drive", next_lw, next_rw)
+            elif args.simulator == "bicycle":
+                next_a = -0.5 if simulator.state.v > -5 else 0
+                command = ControlState("bicycle", next_a, 0)
+            while(collision_count < 100):
+                # Backward
+                _, info = simulator.step(command)
+                pose = (simulator.state.x, simulator.state.y)
+                # Re-Planning
+                way_points = planner.planning(pose, nav_pos, 20)
+                if len(way_points) > 1:
+                    path = np.array(cubic_spline_2d(way_points, interval=4))
+                    set_controller_path = True
+                # Render Path
+                img = simulator.render()
+                if nav_pos is not None and way_points is not None:
+                    img = render_path(img, nav_pos, way_points, path)
+                img = cv2.flip(img, 0)
+                cv2.imshow(window_name, img)
+                cv2.waitKey(1)
+
+                collision_count += 1
+            collision_count = 0
             pass
         
         # Render Path
