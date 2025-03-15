@@ -31,5 +31,7 @@ class ControllerPurePursuitBasic(Controller):
         target = self.path[target_idx]
 
         # TODO: Pure Pursuit Control for Basic Kinematic Model
-        next_w = 0
-        return next_w, target
+        alpha = np.arctan2(target[1] - y, target[0] - x) - np.deg2rad(yaw)
+        next_w = 2.0 * v * np.sin(alpha) / Ld
+       
+        return np.rad2deg(next_w), target

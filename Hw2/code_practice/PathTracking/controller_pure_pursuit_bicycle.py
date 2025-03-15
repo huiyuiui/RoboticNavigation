@@ -32,5 +32,7 @@ class ControllerPurePursuitBicycle(Controller):
         target = self.path[target_idx]
 
         # TODO: Pure Pursuit Control for Bicycle Kinematic Model
-        next_delta = 0
-        return next_delta, target
+        alpha = np.arctan2(target[1] - y, target[0] - x) - np.deg2rad(yaw)
+        next_w = np.arctan2(2.0 * l * np.sin(alpha), Ld)
+       
+        return np.rad2deg(next_w), target
